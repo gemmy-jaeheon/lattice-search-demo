@@ -57,15 +57,7 @@ def logout():
 if not st.session_state.logged_in:
     st.title("🔐 Lattice 로그인")
 
-    st.markdown("""
-    워크스페이스 ID를 입력하세요.
-
-    **테스트 계정:**
-    - `cogp`, `bluepoint`, `gp`, `gp2`, `cogp2`, `cogp3`
-    - `admin` (전체 데이터 접근)
-    """)
-
-    alias_input = st.text_input("워크스페이스 ID", placeholder="예: cogp")
+    alias_input = st.text_input("워크스페이스 ID", placeholder="워크스페이스 ID 입력")
 
     if st.button("로그인", type="primary"):
         if alias_input:
