@@ -59,9 +59,11 @@ def logout():
 if not st.session_state.logged_in:
     st.title("🔐 Lattice 로그인")
 
-    alias_input = st.text_input("워크스페이스 ID", placeholder="워크스페이스 ID 입력")
+    with st.form("login_form"):
+        alias_input = st.text_input("워크스페이스 ID", placeholder="워크스페이스 ID 입력")
+        submitted = st.form_submit_button("로그인", type="primary")
 
-    if st.button("로그인", type="primary"):
+    if submitted:
         if alias_input:
             if login(alias_input):
                 st.rerun()
