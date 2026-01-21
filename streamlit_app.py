@@ -93,6 +93,11 @@ else:
 
     query = st.text_input("검색어", placeholder="예: 서울에 있는 핀테크")
 
+    # Admin일 때 디버그 모드 토글
+    debug_mode = False
+    if st.session_state.is_admin:
+        debug_mode = st.checkbox("🐛 디버그 모드", value=False)
+
     if st.button("검색", type="primary") and query.strip():
         with st.spinner("검색 중..."):
             headers = {
@@ -111,6 +116,13 @@ else:
                     timeout=30,
                 )
                 data = response.json()
+
+                # 디버그 모드: 전체 응답 표시
+                if debug_mode:
+                    with st.expander("🐛 Debug: API Response", expanded=True):
+                        st.json(data)
+                        st.caption(f"Status: {response.status_code}")
+                        st.caption(f"Headers sent: x-workspace-id={headers.get('x-workspace-id', 'None')}")
 
                 if response.status_code != 200:
                     st.error(f"오류: {data.get('error', {}).get('message', '알 수 없는 오류')}")
