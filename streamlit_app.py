@@ -154,10 +154,14 @@ else:
 
                     for company in data["results"]:
                         with st.expander(f"**{company['name']}** - {company.get('industry', '-')}"):
-                            cols = st.columns(3)
-                            cols[0].markdown(f"**지역:** {company.get('region', '-')} / {company.get('city', '-')}")
-                            cols[1].markdown(f"**라운드:** {company.get('round', '-')}")
-                            cols[2].markdown(f"**단계:** {company.get('stage', '-')}")
+                            cols = st.columns(4)
+                            cols[0].markdown(f"**대표:** {company.get('ceo_name', '-')}")
+                            cols[1].markdown(f"**지역:** {company.get('region', '-')}")
+                            cols[2].markdown(f"**라운드:** {company.get('round', '-')}")
+                            cols[3].markdown(f"**단계:** {company.get('stage', '-')}")
+
+                            if company.get("investment_date"):
+                                st.caption(f"투자일: {company['investment_date']}")
 
                             if company.get("summary"):
                                 st.markdown(company["summary"])
