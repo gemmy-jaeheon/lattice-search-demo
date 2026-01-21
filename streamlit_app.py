@@ -93,13 +93,16 @@ else:
     - **통계**: `산업별 분포`, `평균 밸류에이션` (집계)
     """)
 
-    query = st.text_input("검색어", placeholder="예: 서울에 있는 핀테크")
-
-    # Admin일 때 디버그 모드 토글 (세션 상태로 유지)
+    # Admin일 때 디버그 모드 토글 (form 밖에서 실시간 반영)
     if st.session_state.is_admin:
         st.session_state.debug_mode = st.checkbox("🐛 디버그 모드", value=st.session_state.debug_mode)
 
-    if st.button("검색", type="primary") and query.strip():
+    # Form으로 감싸서 엔터키 검색 지원
+    with st.form("search_form"):
+        query = st.text_input("검색어", placeholder="예: 서울에 있는 핀테크")
+        submitted = st.form_submit_button("검색", type="primary")
+
+    if submitted and query.strip():
         with st.spinner("검색 중..."):
             headers = {
                 "Authorization": f"Bearer {API_KEY}",
