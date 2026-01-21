@@ -22,6 +22,8 @@ if "logged_in" not in st.session_state:
     st.session_state.workspace_alias = None
     st.session_state.workspace_id = None
     st.session_state.is_admin = False
+    st.session_state.debug_mode = False
+    st.session_state.last_response = None
 
 
 def login(alias: str) -> bool:
@@ -93,10 +95,9 @@ else:
 
     query = st.text_input("검색어", placeholder="예: 서울에 있는 핀테크")
 
-    # Admin일 때 디버그 모드 토글
-    debug_mode = False
+    # Admin일 때 디버그 모드 토글 (세션 상태로 유지)
     if st.session_state.is_admin:
-        debug_mode = st.checkbox("🐛 디버그 모드", value=False)
+        st.session_state.debug_mode = st.checkbox("🐛 디버그 모드", value=st.session_state.debug_mode)
 
     if st.button("검색", type="primary") and query.strip():
         with st.spinner("검색 중..."):
@@ -116,13 +117,11 @@ else:
                     timeout=30,
                 )
                 data = response.json()
-
-                # 디버그 모드: 전체 응답 표시
-                if debug_mode:
-                    with st.expander("🐛 Debug: API Response", expanded=True):
-                        st.json(data)
-                        st.caption(f"Status: {response.status_code}")
-                        st.caption(f"Headers sent: x-workspace-id={headers.get('x-workspace-id', 'None')}")
+                st.session_state.last_response = {
+                    "data": data,
+                    "status": response.status_code,
+                    "workspace_id": headers.get("x-workspace-id", "None (Admin)")
+                }
 
                 if response.status_code != 200:
                     st.error(f"오류: {data.get('error', {}).get('message', '알 수 없는 오류')}")
@@ -175,3 +174,10 @@ else:
                 st.error(f"네트워크 오류: {e}")
             except Exception as e:
                 st.error(f"오류 발생: {e}")
+
+    # 디버그 모드: 마지막 응답 표시 (검색 결과 아래에)
+    if st.session_state.debug_mode and st.session_state.last_response:
+        with st.expander("🐛 Debug: Last API Response", expanded=True):
+            st.caption(f"Status: {st.session_state.last_response['status']}")
+            st.caption(f"x-workspace-id: {st.session_state.last_response['workspace_id']}")
+            st.json(st.session_state.last_response["data"])
