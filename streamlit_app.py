@@ -122,7 +122,7 @@ def render_startup_results(data: dict):
             # 동적 필드 (matched_conditions 기반)
             dynamic_fields = []
             if "capital_impairment" in matched_conditions:
-                status = "자본잠식" if company.get("is_capital_impaired") else "정상"
+                status = "자본잠식" if company.get("is_capital_impaired") else "자본잠식 아님"
                 dynamic_fields.append(f"**자본상태:** {status}")
             if "ceo_gender" in matched_conditions:
                 gender = {"F": "여성", "M": "남성"}.get(company.get("ceo_gender"), "-")
