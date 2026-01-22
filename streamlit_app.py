@@ -16,6 +16,12 @@ WORKSPACE_ALIASES = {
     "cogp3": "95c3556c-d44a-4f3d-8068-94a69fe08c9f",
 }
 
+# 비밀번호 필요 워크스페이스
+WORKSPACE_PASSWORDS = {
+    "admin": "Gemmy1115*",
+    "bluepoint": "Bluepoint07!",
+}
+
 # 세션 상태 초기화
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -26,25 +32,30 @@ if "logged_in" not in st.session_state:
     st.session_state.messages = []
 
 
-def login(alias: str) -> bool:
-    """별칭으로 로그인 시도"""
+def login(alias: str, password: str = "") -> tuple[bool, str]:
+    """별칭으로 로그인 시도. 반환: (성공여부, 에러메시지)"""
     alias = alias.strip().lower()
+
+    # 비밀번호 필요 워크스페이스 확인
+    if alias in WORKSPACE_PASSWORDS:
+        if password != WORKSPACE_PASSWORDS[alias]:
+            return False, "비밀번호가 틀렸습니다."
 
     if alias == "admin":
         st.session_state.logged_in = True
         st.session_state.workspace_alias = "admin"
         st.session_state.workspace_id = None
         st.session_state.is_admin = True
-        return True
+        return True, ""
 
     if alias in WORKSPACE_ALIASES:
         st.session_state.logged_in = True
         st.session_state.workspace_alias = alias
         st.session_state.workspace_id = WORKSPACE_ALIASES[alias]
         st.session_state.is_admin = False
-        return True
+        return True, ""
 
-    return False
+    return False, "존재하지 않는 워크스페이스입니다."
 
 
 def logout():
@@ -137,6 +148,103 @@ def render_web_results(data: dict):
         st.markdown("---")
 
 
+def format_krw(value):
+    """숫자를 한국 원화 형식으로 포맷"""
+    if value is None:
+        return "-"
+    if abs(value) >= 100_000_000:
+        return f"{value / 100_000_000:,.0f}억원"
+    elif abs(value) >= 10_000:
+        return f"{value / 10_000:,.0f}만원"
+    else:
+        return f"{value:,.0f}원"
+
+
+def render_financial_results(data: dict):
+    """재무제표 결과 렌더링"""
+    company = data.get("company", {})
+    period = data.get("period", {})
+    summary = data.get("summary", {})
+    full = data.get("full", {})
+    meta = data.get("meta", {})
+
+    # 헤더
+    st.markdown(f"**📈 {company.get('name', '')} 재무제표** · {period.get('year', '')}년 {period.get('quarter', '')}")
+
+    if meta.get("is_capital_impaired"):
+        st.warning("⚠️ 자본잠식 상태입니다")
+
+    # 요약 (핵심 지표)
+    st.subheader("핵심 지표")
+    cols = st.columns(5)
+    cols[0].metric("매출액", format_krw(summary.get("revenue")))
+    cols[1].metric("영업이익", format_krw(summary.get("operating_profit")))
+    cols[2].metric("당기순이익", format_krw(summary.get("net_income")))
+    cols[3].metric("총자산", format_krw(summary.get("total_assets")))
+    cols[4].metric("자본총계", format_krw(summary.get("total_equity")))
+
+    # 상세 (펼치기)
+    with st.expander("📋 상세 재무제표", expanded=False):
+        # 손익계산서
+        st.markdown("**손익계산서**")
+        income_data = {
+            "항목": ["매출액", "매출원가", "매출총이익", "판관비", "영업이익", "영업외수익", "영업외비용", "법인세차감전손익", "법인세", "당기순이익"],
+            "금액": [
+                format_krw(full.get("revenue")),
+                format_krw(full.get("cost_of_sales")),
+                format_krw(full.get("gross_profit")),
+                format_krw(full.get("selling_general_administrative_expenses")),
+                format_krw(full.get("operating_profit")),
+                format_krw(full.get("non_operating_income")),
+                format_krw(full.get("non_operating_expenses")),
+                format_krw(full.get("profit_before_tax_expense")),
+                format_krw(full.get("income_tax_expense")),
+                format_krw(full.get("net_income")),
+            ]
+        }
+        st.dataframe(income_data, hide_index=True, use_container_width=True)
+
+        # 재무상태표 - 자산
+        st.markdown("**재무상태표 (자산)**")
+        asset_data = {
+            "항목": ["유동자산", "당좌자산", "재고자산", "비유동자산", "투자자산", "유형자산", "무형자산", "기타비유동자산", "자산총계"],
+            "금액": [
+                format_krw(full.get("current_assets")),
+                format_krw(full.get("quick_assets")),
+                format_krw(full.get("inventory_assets")),
+                format_krw(full.get("non_current_assets")),
+                format_krw(full.get("investment_assets")),
+                format_krw(full.get("tangible_assets")),
+                format_krw(full.get("intangible_assets")),
+                format_krw(full.get("other_non_current_assets")),
+                format_krw(full.get("total_assets")),
+            ]
+        }
+        st.dataframe(asset_data, hide_index=True, use_container_width=True)
+
+        # 재무상태표 - 부채/자본
+        st.markdown("**재무상태표 (부채/자본)**")
+        liability_data = {
+            "항목": ["유동부채", "비유동부채", "부채총계", "자본금", "자본잉여금", "자본조정", "기타포괄손익누계", "이익잉여금", "결손금", "자본총계"],
+            "금액": [
+                format_krw(full.get("current_liabilities")),
+                format_krw(full.get("non_current_liabilities")),
+                format_krw(full.get("total_liabilities")),
+                format_krw(full.get("capital")),
+                format_krw(full.get("capital_surplus")),
+                format_krw(full.get("capital_adjustment")),
+                format_krw(full.get("accumulated_other_comprehensive_income")),
+                format_krw(full.get("retained_earnings")),
+                format_krw(full.get("deficit")),
+                format_krw(full.get("total_equity")),
+            ]
+        }
+        st.dataframe(liability_data, hide_index=True, use_container_width=True)
+
+    if meta.get("updated_at"):
+        st.caption(f"업데이트: {meta['updated_at'][:10]}")
+
+
 def render_error(data: dict):
     """에러 렌더링"""
     error = data.get("error", {})
@@ -149,6 +257,8 @@ def render_response(data: dict, status: int):
         render_error(data)
     elif data.get("type") == "analytics":
         render_analytics_results(data)
+    elif data.get("type") == "financial":
+        render_financial_results(data)
     elif data.get("type") == "web":
         render_web_results(data)
     elif data.get("results") is not None:
@@ -168,14 +278,16 @@ if not st.session_state.logged_in:
 
     with st.form("login_form"):
         alias_input = st.text_input("워크스페이스 ID", placeholder="워크스페이스 ID 입력")
+        password_input = st.text_input("비밀번호", type="password", placeholder="비밀번호 (필요시)")
         submitted = st.form_submit_button("로그인", type="primary")
 
     if submitted:
         if alias_input:
-            if login(alias_input):
+            success, error_msg = login(alias_input, password_input)
+            if success:
                 st.rerun()
             else:
-                st.error("존재하지 않는 워크스페이스입니다.")
+                st.error(error_msg)
         else:
             st.warning("워크스페이스 ID를 입력하세요.")
 
@@ -196,7 +308,8 @@ else:
     # 안내 메시지
     st.info("""
     **지원 기능:**
-    - 🏢 **스타트업 검색**: "토스", "핀테크", "서울 시리즈A", "토스같은"
+    - 🏢 **스타트업 검색**: "토스", "핀테크", "서울 시리즈A", "토스같은", "자본잠식 기업"
+    - 📈 **재무제표**: "A기업 재무제표", "B사 2024년 실적"
     - 🌐 **웹검색**: "AI 최신 뉴스", "테슬라 주가"
     - 📊 **통계**: "핀테크 몇 개?", "산업별 분포"
     """)
