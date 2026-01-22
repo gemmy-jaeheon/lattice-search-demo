@@ -89,21 +89,52 @@ def render_startup_results(data: dict):
     """스타트업 검색 결과 렌더링"""
     meta = data.get("meta", {})
     results = data.get("results", [])
+    matched_conditions = meta.get("matched_conditions", {})
 
     st.markdown(f"**검색 결과** ({meta.get('total', len(results))}건) · `{meta.get('route_type', '-')}`")
 
-    if meta.get("matched_conditions"):
-        st.caption(f"적용 조건: {meta['matched_conditions']}")
+    if matched_conditions:
+        st.caption(f"적용 조건: {matched_conditions}")
     if meta.get("reference_company"):
         st.caption(f"참조 기업: {meta['reference_company']}")
 
     for company in results:
-        with st.expander(f"**{company['name']}** - {company.get('industry', '-')}"):
+        # 뱃지 생성
+        badges = []
+        if company.get("is_capital_impaired"):
+            badges.append("🔴 자본잠식")
+        if company.get("has_exit"):
+            badges.append("💰 엑싯")
+        badge_str = " ".join(badges)
+
+        title = f"**{company['name']}** - {company.get('industry', '-')}"
+        if badge_str:
+            title += f"  {badge_str}"
+
+        with st.expander(title):
+            # 기본 4컬럼
             cols = st.columns(4)
             cols[0].markdown(f"**대표:** {company.get('ceo_name', '-')}")
             cols[1].markdown(f"**지역:** {company.get('region', '-')}")
             cols[2].markdown(f"**라운드:** {company.get('round', '-')}")
             cols[3].markdown(f"**단계:** {company.get('stage', '-')}")
+
+            # 동적 필드 (matched_conditions 기반)
+            dynamic_fields = []
+            if "capital_impairment" in matched_conditions:
+                status = "자본잠식" if company.get("is_capital_impaired") else "정상"
+                dynamic_fields.append(f"**자본상태:** {status}")
+            if "ceo_gender" in matched_conditions:
+                gender = {"F": "여성", "M": "남성"}.get(company.get("ceo_gender"), "-")
+                dynamic_fields.append(f"**대표 성별:** {gender}")
+            if "has_exit" in matched_conditions:
+                exit_status = "O" if company.get("has_exit") else "X"
+                dynamic_fields.append(f"**엑싯:** {exit_status}")
+            if "sourcing_channel" in matched_conditions:
+                dynamic_fields.append(f"**발굴채널:** {company.get('sourcing_channel', '-')}")
+
+            if dynamic_fields:
+                st.markdown(" · ".join(dynamic_fields))
 
             if company.get("investment_date"):
                 st.caption(f"투자일: {company['investment_date']}")
