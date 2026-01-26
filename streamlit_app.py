@@ -163,7 +163,7 @@ def render_analytics_results(data: dict):
 
 
 def render_web_results(data: dict):
-    """웹검색 결과 렌더링"""
+    """웹검색 결과 렌더링 (번호 형태 출처 표기)"""
     results = data.get("results", [])
     meta = data.get("meta", {})
 
@@ -173,10 +173,16 @@ def render_web_results(data: dict):
         st.info("검색 결과가 없습니다.")
         return
 
-    for r in results:
-        st.markdown(f"**[{r.get('title', '')}]({r.get('link', '')})**")
+    # 번호 형태로 결과 표시
+    for i, r in enumerate(results, 1):
+        st.markdown(f"[{i}] **[{r.get('title', '')}]({r.get('link', '')})**")
         st.caption(r.get("snippet", ""))
-        st.markdown("---")
+
+    # 하단 출처 목록
+    st.markdown("---")
+    st.markdown("**출처:**")
+    for i, r in enumerate(results, 1):
+        st.markdown(f"[{i}] {r.get('link', '')}")
 
 
 def format_krw(value):
