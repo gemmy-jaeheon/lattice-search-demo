@@ -85,37 +85,119 @@ def call_search_api(query: str) -> dict:
     return {"data": response.json(), "status": response.status_code}
 
 
-def generate_summary(results: list, meta: dict) -> str:
-    """검색 결과에 대한 자연어 서머리 생성"""
-    count = len(results)
-    route_type = meta.get("route_type", "")
-    matched_conditions = meta.get("matched_conditions", {})
+def generate_single_company_summary(company: dict) -> str:
+    """1개 기업에 대한 상세 서머리 생성"""
+    name = company.get("name", "")
+    industry = company.get("industry", "")
+    region = company.get("region", "")
+    round_val = company.get("round", "")
+    stage = company.get("stage", "")
+    ceo_name = company.get("ceo_name", "")
+    summary_text = company.get("summary", "")
+    technologies = company.get("technologies", "")
+    pre_money = company.get("pre_money_valuation")
+
+    lines = []
+
+    # 1줄: 기본 정보
+    intro_parts = []
+    if industry:
+        intro_parts.append(f"{industry} 분야")
+    if round_val:
+        intro_parts.append(f"{round_val.upper()} 단계")
+    if region:
+        intro_parts.append(f"{region} 소재")
+
+    intro = ", ".join(intro_parts) if intro_parts else ""
+    lines.append(f"**{name}**은(는) {intro} 기업입니다." if intro else f"**{name}**입니다.")
+
+    # 2줄: 대표자 + 단계
+    detail_parts = []
+    if ceo_name:
+        detail_parts.append(f"대표는 **{ceo_name}**")
+    if stage:
+        stage_map = {"discovery": "발굴", "review": "검토", "due_diligence": "실사", "investment": "투자", "portfolio": "포트폴리오"}
+        detail_parts.append(f"현재 {stage_map.get(stage, stage)} 단계")
+    if detail_parts:
+        lines.append(", ".join(detail_parts) + "입니다.")
+
+    # 3줄: 사업 요약
+    if summary_text:
+        lines.append(f"")
+        lines.append(f"> {summary_text}")
+
+    # 4줄: 기술스택
+    if technologies:
+        lines.append(f"")
+        lines.append(f"**기술**: {technologies}")
+
+    # 5줄: 밸류에이션
+    if pre_money:
+        val_str = f"{pre_money / 100_000_000:,.0f}억원" if pre_money >= 100_000_000 else f"{pre_money / 10_000:,.0f}만원"
+        lines.append(f"**Pre-money**: {val_str}")
+
+    return "\n".join(lines)
+
+
+def generate_multi_company_summary(results: list, meta: dict) -> str:
+    """2-3개 기업에 대한 요약 (각 1줄씩)"""
     reference_company = meta.get("reference_company")
+    matched_conditions = meta.get("matched_conditions", {})
+    count = len(results)
 
-    if count == 1:
-        company = results[0]
-        name = company.get("name", "")
-        industry = company.get("industry", "")
-        region = company.get("region", "")
-        round_val = company.get("round", "")
-        summary_text = company.get("summary", "")
+    lines = []
 
-        parts = [f"**{name}**"]
+    # 헤더
+    if reference_company:
+        lines.append(f"**{reference_company}**와 유사한 {count}개 기업을 찾았습니다.")
+    elif matched_conditions:
+        cond_parts = []
+        if matched_conditions.get("industry"):
+            cond_parts.append(matched_conditions["industry"])
+        if matched_conditions.get("region"):
+            cond_parts.append(matched_conditions["region"])
+        if matched_conditions.get("round"):
+            cond_parts.append(matched_conditions["round"])
+        if cond_parts:
+            lines.append(f"{' '.join(cond_parts)} 조건에 맞는 {count}개 기업입니다.")
+        else:
+            lines.append(f"{count}개 기업을 찾았습니다.")
+    else:
+        lines.append(f"{count}개 기업을 찾았습니다.")
+
+    lines.append("")
+
+    # 각 기업 1줄씩
+    for c in results:
+        name = c.get("name", "")
+        industry = c.get("industry", "")
+        summary = c.get("summary", "")
+        summary_short = summary[:60] + "..." if len(summary) > 60 else summary
+        line = f"• **{name}**"
         if industry:
-            parts.append(f"{industry} 분야")
-        if region:
-            parts.append(f"{region} 소재")
-        if round_val:
-            parts.append(f"{round_val.upper()} 단계")
+            line += f" ({industry})"
+        if summary_short:
+            line += f" - {summary_short}"
+        lines.append(line)
 
-        desc = ", ".join(parts[1:]) if len(parts) > 1 else ""
-        result = f"{parts[0]}은(는) {desc} 기업입니다." if desc else f"{parts[0]}입니다."
+    return "\n".join(lines)
 
-        if summary_text:
-            result += f" {summary_text[:100]}{'...' if len(summary_text) > 100 else ''}"
-        return result
 
-    # 2개 이상
+def generate_summary(results: list, meta: dict) -> str:
+    """검색 결과에 대한 자연어 서머리 생성 (개수에 비례)"""
+    count = len(results)
+    reference_company = meta.get("reference_company")
+    matched_conditions = meta.get("matched_conditions", {})
+
+    # 1개: 매우 상세
+    if count == 1:
+        return generate_single_company_summary(results[0])
+
+    # 2-3개: 각 기업 1줄씩
+    if count <= 3:
+        return generate_multi_company_summary(results, meta)
+
+    # 4-9개: 기업명 나열
     names = [r.get("name", "") for r in results[:5]]
     names_str = ", ".join(names)
     if count > 5:
