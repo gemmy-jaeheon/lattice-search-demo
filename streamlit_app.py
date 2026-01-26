@@ -85,11 +85,71 @@ def call_search_api(query: str) -> dict:
     return {"data": response.json(), "status": response.status_code}
 
 
+def generate_summary(results: list, meta: dict) -> str:
+    """검색 결과에 대한 자연어 서머리 생성"""
+    count = len(results)
+    route_type = meta.get("route_type", "")
+    matched_conditions = meta.get("matched_conditions", {})
+    reference_company = meta.get("reference_company")
+
+    if count == 1:
+        company = results[0]
+        name = company.get("name", "")
+        industry = company.get("industry", "")
+        region = company.get("region", "")
+        round_val = company.get("round", "")
+        summary_text = company.get("summary", "")
+
+        parts = [f"**{name}**"]
+        if industry:
+            parts.append(f"{industry} 분야")
+        if region:
+            parts.append(f"{region} 소재")
+        if round_val:
+            parts.append(f"{round_val.upper()} 단계")
+
+        desc = ", ".join(parts[1:]) if len(parts) > 1 else ""
+        result = f"{parts[0]}은(는) {desc} 기업입니다." if desc else f"{parts[0]}입니다."
+
+        if summary_text:
+            result += f" {summary_text[:100]}{'...' if len(summary_text) > 100 else ''}"
+        return result
+
+    # 2개 이상
+    names = [r.get("name", "") for r in results[:5]]
+    names_str = ", ".join(names)
+    if count > 5:
+        names_str += f" 외 {count - 5}개"
+
+    if reference_company:
+        return f"**{reference_company}**와 유사한 {count}개 기업을 찾았습니다: {names_str}"
+
+    if matched_conditions:
+        conditions_desc = []
+        if matched_conditions.get("industry"):
+            conditions_desc.append(matched_conditions["industry"])
+        if matched_conditions.get("region"):
+            conditions_desc.append(matched_conditions["region"])
+        if matched_conditions.get("round"):
+            conditions_desc.append(matched_conditions["round"])
+        if conditions_desc:
+            return f"{' '.join(conditions_desc)} 조건에 맞는 {count}개 기업입니다: {names_str}"
+
+    return f"{count}개 기업을 찾았습니다: {names_str}"
+
+
 def render_startup_results(data: dict):
     """스타트업 검색 결과 렌더링"""
     meta = data.get("meta", {})
     results = data.get("results", [])
     matched_conditions = meta.get("matched_conditions", {})
+    count = len(results)
+
+    # 10개 미만이면 자연어 서머리 표시
+    if count < 10:
+        summary = generate_summary(results, meta)
+        st.markdown(summary)
+        st.markdown("---")
 
     st.markdown(f"**검색 결과** ({meta.get('total', len(results))}건) · `{meta.get('route_type', '-')}`")
 
