@@ -220,6 +220,119 @@ def generate_summary(results: list, meta: dict) -> str:
     return f"{count}개 기업을 찾았습니다: {names_str}"
 
 
+# 컬럼 출처 매핑 (뷰 컬럼 → 원본 테이블/계산 방식)
+COLUMN_SOURCES = {
+    "high_risk": "risk_assessments → 5개 플래그 합산 ≥ 3",
+    "risk_flags": "risk_assessments.has_*_issue (최신 분기)",
+    "risk_executive": "risk_assessments.has_executive_issue",
+    "risk_cashflow": "risk_assessments.has_cashflow_issue",
+    "risk_capital_erosion": "risk_assessments.has_capital_erosion_issue",
+    "risk_key_personnel": "risk_assessments.has_key_personnel_issue",
+    "risk_competitor": "risk_assessments.has_competitor_issue",
+    "report_status": "portfolio_reports.status (최신 분기)",
+    "reexamine": "stage='dropped' AND (has_evaluation_completed OR has_pitching_completed)",
+    "drop_reasons_contains": "investor_startups.drop_reasons (배열→텍스트 LIKE)",
+    "fund_name": "investments → funds.name (최신 투자)",
+    "is_capital_impaired": "portfolio_reports.total_equity < 0",
+    "capital_impairment": "portfolio_reports.total_equity < 0",
+    "has_evaluation_completed": "investment_evaluations.status IN ('completed', 'contract_signed')",
+    "has_pitching_completed": "pitching_evaluations.is_completed = true",
+    "industry": "investor_industries.name",
+    "region": "investor_startups.state",
+    "round": "workspaces.round",
+    "stage": "investor_startups.investment_stage",
+    "ceo_gender": "workspace_members.individual_id (주민번호 뒷자리)",
+    "sourcing_channel": "investor_sourcing_channels.name",
+    "sourcing_date_gte": "investor_startups.sourcing_date ≥",
+    "sourcing_date_lte": "investor_startups.sourcing_date ≤",
+    "round_gte": "workspaces.round (라운드 순서 비교)",
+    "round_lte": "workspaces.round (라운드 순서 비교)",
+    "pre_money_valuation_gte": "investments.pre_money_valuation ≥",
+}
+
+
+def get_condition_sources(conditions: dict) -> dict:
+    """matched_conditions의 각 키에 대한 출처 반환"""
+    if not conditions:
+        return {}
+    sources = {}
+    for key in conditions.keys():
+        if key in COLUMN_SOURCES:
+            sources[key] = COLUMN_SOURCES[key]
+        elif key.endswith("_gte") or key.endswith("_lte"):
+            base_key = key[:-4]
+            if base_key in COLUMN_SOURCES:
+                sources[key] = COLUMN_SOURCES.get(key, f"{COLUMN_SOURCES[base_key]} (범위)")
+    return sources
+
+
+def format_matched_conditions(conditions: dict) -> str:
+    """matched_conditions를 한글로 풀어서 표시"""
+    if not conditions:
+        return ""
+
+    labels = []
+
+    # 기본 필터
+    if conditions.get("industry"):
+        labels.append(f"산업: {conditions['industry']}")
+    if conditions.get("region"):
+        labels.append(f"지역: {conditions['region']}")
+    if conditions.get("round"):
+        labels.append(f"라운드: {conditions['round'].upper()}")
+    if conditions.get("stage"):
+        stage_map = {
+            "discovery": "발굴", "review": "검토", "due_diligence": "실사",
+            "management": "관리", "dropped": "탈락", "exit": "엑싯", "impaired": "손상"
+        }
+        labels.append(f"단계: {stage_map.get(conditions['stage'], conditions['stage'])}")
+    if conditions.get("ceo_gender"):
+        gender = "여성" if conditions["ceo_gender"] == "F" else "남성"
+        labels.append(f"대표: {gender}")
+
+    # 범위 필터
+    if conditions.get("round_gte"):
+        labels.append(f"시리즈{conditions['round_gte'].upper()} 이상")
+    if conditions.get("round_lte"):
+        labels.append(f"시리즈{conditions['round_lte'].upper()} 이하")
+    if conditions.get("pre_money_valuation_gte"):
+        val = conditions["pre_money_valuation_gte"] / 100_000_000
+        labels.append(f"밸류에이션 {val:.0f}억 이상")
+    if conditions.get("sourcing_date_gte"):
+        labels.append(f"발굴일: {conditions['sourcing_date_gte']} 이후")
+    if conditions.get("sourcing_date_lte"):
+        labels.append(f"발굴일: {conditions['sourcing_date_lte']} 이전")
+
+    # Phase 2 고급 필터
+    if conditions.get("high_risk"):
+        labels.append("🔴 고위험 (리스크 3개↑)")
+    if conditions.get("risk_flags"):
+        flag_map = {
+            "cashflow": "현금흐름", "executive": "경영진",
+            "capital_erosion": "자본잠식", "key_personnel": "핵심인력", "competitor": "경쟁사"
+        }
+        flags = [flag_map.get(f, f) for f in conditions["risk_flags"]]
+        labels.append(f"리스크: {', '.join(flags)}")
+    if conditions.get("report_status") == "in_progress":
+        labels.append("📋 보고서 미제출")
+    if conditions.get("report_status") == "completed":
+        labels.append("📋 보고서 제출완료")
+    if conditions.get("reexamine"):
+        basis = conditions.get("reexamine_basis", "")
+        if basis == "evaluation_or_pitching":
+            labels.append("🔄 재검토 대상 (심사/피칭 후 탈락)")
+        else:
+            labels.append("🔄 재검토 대상")
+    if conditions.get("drop_reasons_contains"):
+        labels.append(f"탈락사유: '{conditions['drop_reasons_contains']}' 포함")
+    if conditions.get("fund_name"):
+        labels.append(f"펀드: {conditions['fund_name']}")
+    if conditions.get("capital_impairment"):
+        labels.append("🔴 자본잠식")
+
+    return " · ".join(labels) if labels else str(conditions)
+
+
 def render_startup_results(data: dict):
     """스타트업 검색 결과 렌더링"""
     meta = data.get("meta", {})
@@ -236,7 +349,7 @@ def render_startup_results(data: dict):
     st.markdown(f"**검색 결과** ({meta.get('total', len(results))}건) · `{meta.get('route_type', '-')}`")
 
     if matched_conditions:
-        st.caption(f"적용 조건: {matched_conditions}")
+        st.caption(f"적용 조건: {format_matched_conditions(matched_conditions)}")
     if meta.get("reference_company"):
         st.caption(f"참조 기업: {meta['reference_company']}")
 
@@ -508,6 +621,14 @@ else:
                 # 디버그 모드
                 if st.session_state.debug_mode:
                     with st.expander("🐛 Debug", expanded=False):
+                        # 출처 정보
+                        matched = msg["data"].get("meta", {}).get("matched_conditions", {})
+                        if matched:
+                            st.markdown("**📍 컬럼 출처 (search_startups 뷰)**")
+                            sources = get_condition_sources(matched)
+                            for key, source in sources.items():
+                                st.markdown(f"- `{key}`: {source}")
+                            st.markdown("---")
                         st.json(msg["data"])
 
     # 채팅 입력
@@ -531,6 +652,14 @@ else:
 
                     if st.session_state.debug_mode:
                         with st.expander("🐛 Debug", expanded=False):
+                            # 출처 정보
+                            matched = result["data"].get("meta", {}).get("matched_conditions", {})
+                            if matched:
+                                st.markdown("**📍 컬럼 출처 (search_startups 뷰)**")
+                                sources = get_condition_sources(matched)
+                                for key, source in sources.items():
+                                    st.markdown(f"- `{key}`: {source}")
+                                st.markdown("---")
                             st.json(result["data"])
 
                 except requests.Timeout:
