@@ -555,6 +555,8 @@ def render_chat_response(data: dict):
         source_parts.append(f"검색 {sources['search']}건")
     if sources.get("investments"):
         source_parts.append(f"투자 {sources['investments']}건")
+    if sources.get("timeline"):
+        source_parts.append(f"타임라인 {sources['timeline']}건")
     if sources.get("risks"):
         source_parts.append(f"리스크 {sources['risks']}건")
 
