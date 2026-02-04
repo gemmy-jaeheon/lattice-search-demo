@@ -67,8 +67,12 @@ def logout():
     st.session_state.messages = []
 
 
-def call_search_api(query: str) -> dict:
-    """검색 API 호출"""
+def call_chat_api(query: str) -> dict:
+    """Chat API 호출 (검색 + LLM 요약)"""
+    # API_URL에서 base URL 추출
+    base_url = API_URL.rsplit("/", 1)[0]  # /functions/v1
+    chat_url = f"{base_url}/chat"
+
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
@@ -77,10 +81,10 @@ def call_search_api(query: str) -> dict:
         headers["x-workspace-id"] = st.session_state.workspace_id
 
     response = requests.post(
-        API_URL,
+        chat_url,
         headers=headers,
         json={"query": query},
-        timeout=30,
+        timeout=60,  # LLM 처리 시간 고려
     )
     return {"data": response.json(), "status": response.status_code}
 
@@ -537,6 +541,27 @@ def render_financial_results(data: dict):
         st.caption(f"업데이트: {meta['updated_at'][:10]}")
 
 
+def render_chat_response(data: dict):
+    """Chat API 응답 렌더링"""
+    answer = data.get("answer", "")
+    sources = data.get("sources", {})
+
+    # 마크다운 답변 표시
+    st.markdown(answer)
+
+    # 출처 정보 (하단에 작게)
+    source_parts = []
+    if sources.get("search"):
+        source_parts.append(f"검색 {sources['search']}건")
+    if sources.get("investments"):
+        source_parts.append(f"투자 {sources['investments']}건")
+    if sources.get("risks"):
+        source_parts.append(f"리스크 {sources['risks']}건")
+
+    if source_parts:
+        st.caption(f"📊 {' · '.join(source_parts)}")
+
+
 def render_error(data: dict):
     """에러 렌더링"""
     error = data.get("error", {})
@@ -547,6 +572,8 @@ def render_response(data: dict, status: int):
     """응답 타입에 따라 렌더링"""
     if status != 200:
         render_error(data)
+    elif data.get("type") == "chat":
+        render_chat_response(data)
     elif data.get("type") == "analytics":
         render_analytics_results(data)
     elif data.get("type") == "financial":
@@ -642,7 +669,7 @@ else:
         with st.chat_message("assistant"):
             with st.spinner("검색 중..."):
                 try:
-                    result = call_search_api(prompt)
+                    result = call_chat_api(prompt)
                     st.session_state.messages.append({
                         "role": "assistant",
                         "data": result["data"],
