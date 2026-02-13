@@ -549,6 +549,16 @@ def render_chat_response(data: dict):
     # 마크다운 답변 표시
     st.markdown(answer)
 
+    # 구조화 결과 (있으면 아래에 표시)
+    sr = data.get("search_result", {})
+    if sr:
+        if sr.get("type") == "analytics" and sr.get("data"):
+            render_analytics_results(sr)
+        elif sr.get("type") == "financial":
+            render_financial_results(sr)
+        elif sr.get("results"):
+            render_startup_results(sr)
+
     # 출처 정보 (하단에 작게)
     source_parts = []
     if sources.get("search"):
