@@ -406,6 +406,25 @@ def render_startup_results(data: dict):
                 st.markdown(f"**Pre-money:** {val / 100_000_000:.0f}억원")
 
 
+COLUMN_LABEL_FALLBACK = {
+    "rank": "순위", "name": "기업명", "industry": "산업", "count": "개수",
+    "growth_rate": "성장률(%)", "current_revenue": "올해 매출", "previous_revenue": "전년 매출",
+    "current_year": "기준연도", "current_valuation": "현재 기업가치", "previous_valuation": "이전 기업가치",
+    "current_date": "기준일", "previous_date": "이전일",
+    "fund_name": "펀드명", "committed_capital": "약정금액", "total_invested": "투자금액",
+    "achievement_rate": "달성률(%)", "remaining": "잔여금액", "total_investments": "투자건수",
+    "objectives": "목적별 달성률",
+    "investment_principal": "투자원금", "current_equity_value": "현재 지분가치",
+    "value_ratio": "평가가치비율", "risk_count": "리스크 수", "loss_score": "손실점수",
+    "moic": "MOIC", "holding_years": "보유기간(년)", "holding_period_months": "보유기간(월)",
+    "share_change_count": "주식변동 건수", "similarity_score": "유사도",
+    "first_investment_date": "최초투자일", "exit_date": "Exit 일자", "exit_returns": "Exit 회수금",
+    "round": "라운드", "stage": "단계", "region": "지역", "ceo_name": "대표",
+    "pre_money_valuation": "Pre-money", "post_money_valuation": "Post-money",
+    "investment_date": "투자일", "summary": "요약", "technologies": "기술",
+}
+
+
 def render_analytics_results(data: dict):
     """통계 결과 렌더링"""
     meta = data.get("meta", {})
@@ -413,7 +432,15 @@ def render_analytics_results(data: dict):
     st.caption(meta.get("description", ""))
 
     if data.get("data"):
-        st.dataframe(data["data"], use_container_width=True)
+        import pandas as pd
+        df = pd.DataFrame(data["data"])
+        # meta.columns의 한글 label로 컬럼명 변환 → 없으면 폴백 매핑
+        columns_meta = meta.get("columns", [])
+        column_map = {c["name"]: c["label"] for c in columns_meta if c.get("name") and c.get("label")}
+        if not column_map:
+            column_map = {col: COLUMN_LABEL_FALLBACK.get(col, col) for col in df.columns}
+        df = df.rename(columns=column_map)
+        st.dataframe(df, use_container_width=True)
     else:
         st.info("집계 결과가 없습니다.")
 
